@@ -1,0 +1,33 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.program.training'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.12'
+    implementation 'ch.qos.logback:logback-classic:1.4.14'
+
+    testImplementation 'org.mockito:mockito-core:5.14.2'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.14.2'
+
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.assertj:assertj-core:3.24.2'
+
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+}
+
+test {
+    useJUnitPlatform()  // for JUnit 5 support
+    jvmArgs("-XX:+EnableDynamicAgentLoading")
+}
