@@ -7,6 +7,6 @@ public interface LoadBalancer
 {
     void registerService(Server server);
     void deregisterService(Server server);
-    Server selectServer();
+    Server selectServer(HttpRequest request);
     void shutdown() throws InterruptedException;
 }

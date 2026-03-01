@@ -8,7 +8,8 @@ import java.util.List;
 public interface LoadBalancerContext
 {
     Server roundRobinSelect(List<Server> servers);
-    Server ipHashSelect(List<Server> servers);
-    Server weightSelect(List<Server> servers);
-    // ...
+    Server ipHashSelect(List<Server> servers, HttpRequest request);
+    Server weightedRoundRobinSelect(List<Server> servers);
+    Server leastConnectionsSelect(List<Server> servers);
+
 }

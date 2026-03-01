@@ -1,5 +1,6 @@
 package com.program.training.loadballancer;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,6 +41,11 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
     {
         Objects.requireNonNull(server);
         servers.put(server.id(), server);
+        // populate weightedRoundRobinCounters map for corresponding algorithm
+        if (this.algorithm.equals(Algorithm.WEIGHTED_ROUND_ROBIN))
+        {
+            weightedRoundRobinCounters.put(server.id(), server.weight());
+        }
     }
 
     @Override
@@ -48,14 +54,19 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
         // Mustn't be active server
         Objects.requireNonNull(server);
         servers.remove(server.id());
+        // populate weightedRoundRobinCounters map for corresponding algorithm
+        if (this.algorithm.equals(Algorithm.WEIGHTED_ROUND_ROBIN))
+        {
+            weightedRoundRobinCounters.remove(server.id());
+        }
     }
 
     @Override
-    public Server selectServer()
+    public Server selectServer(HttpRequest request)
     {
         if (servers.isEmpty())
             throw new IllegalStateException();
-        return algorithm.select(servers.values().stream().toList(), this);
+        return algorithm.select(servers.values().stream().toList(), request, this);
     }
 
     @Override
@@ -66,15 +77,53 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
     }
 
     @Override
-    public Server ipHashSelect(List<Server> servers)
+    public Server ipHashSelect(List<Server> servers, HttpRequest request)
     {
-        // not in this version
-        throw new UnsupportedOperationException();
+        // To avoid Integer.MIN_VALUE and overflow
+        // int index = Math.abs(request.clientIP().hashCode()) % servers.size(); - dangerous case
+        // int index = (hash == Integer.MIN_VALUE) ? 0 : Math.abs(hash) % servers.size(); - can be done like this
+        int index = (request.clientIP().hashCode() & Integer.MAX_VALUE) % servers.size();
+        return servers.get(index);
     }
 
     @Override
-    public Server weightSelect(List<Server> servers) {
-        return null;
+    public Server weightedRoundRobinSelect(List<Server> servers)
+    {
+        Server selected = servers.stream().filter(s -> weightedRoundRobinCounters.get(s.id()) > 0).
+                max(Comparator.comparingInt( s ->
+                    weightedRoundRobinCounters.get(s.id())
+        )).orElseThrow(IllegalStateException::new);
+        decrementServerWeight(selected);
+        return selected;
+    }
+
+    public void incrementServerWeight(Server server)
+    {
+        weightedRoundRobinCounters.compute(server.id(),
+                (key, currentWeight)-> currentWeight == null ? server.weight() + 1 : currentWeight + 1);
+    }
+
+    public void decrementServerWeight(Server server)
+    {
+        weightedRoundRobinCounters.compute(server.id(),
+                (key, currentWeight) ->
+                {
+                    if  (currentWeight == null)
+                        currentWeight = server.weight();
+                    currentWeight--;
+
+                    return currentWeight < 0 ? 0 : currentWeight;
+                });
+    }
+
+    @Override
+    public Server leastConnectionsSelect(List<Server> servers)
+    {
+        Server selected = servers.stream().min(
+                Comparator.comparingInt(s -> s.connection().get())).orElse(servers.getFirst());
+        selected.connection().getAndIncrement();
+
+        return selected;
     }
 
     private void startHealthCheckTask()
