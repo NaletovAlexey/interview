@@ -1,6 +1,7 @@
 package com.program.training.streamapi;
 
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * @author naletov
@@ -36,5 +37,47 @@ public class StreamApiTraining {
 
         return departments.stream().flatMap(dep -> dep.getEmployees().stream()).toList();
     }
+
+    public static Map<String, Double> calculatePositions(List<Transaction> transactions) {
+        Map<String, Double> positionMap = new HashMap<>();
+
+        for (Transaction transaction : transactions) {
+            positionMap.merge(transaction.securityId(),
+                    transaction.transactionType().getValue() *
+                    transaction.quantity(), Double::sum);
+
+       }
+        return positionMap;
+    }
+
+    public Map<String, Double> calculatePositionsStream(List<Transaction> transactions) {
+        return transactions.stream().
+                collect(Collectors.groupingBy(Transaction::securityId,
+                        Collectors.summingDouble(t -> t.quantity()*t.transactionType().getValue())));
+    }
+
+    // Testing
+    public static void main(String[] args)
+    {
+        StreamApiTraining  streamApiTraining = new StreamApiTraining();
+        List<Transaction> transactions = new ArrayList<>();
+        transactions.add(new Transaction("11111", 10, new Date(), TransactionType.BUY));
+        transactions.add(new Transaction("11111", 5, new Date(), TransactionType.SELL));
+        transactions.add(new Transaction("11111", 3, new Date(), TransactionType.BUY));
+        transactions.add(new Transaction("22222", 7, new Date(), TransactionType.BUY));
+        transactions.add(new Transaction("22222", 11, new Date(), TransactionType.SELL));
+        transactions.add(new Transaction("33333", 3, new Date(), TransactionType.BUY));
+        transactions.add(new Transaction("33333", 7, new Date(), TransactionType.SELL));
+        transactions.add(new Transaction("33333", 9, new Date(), TransactionType.SELL));
+        transactions.add(new Transaction("33333", 8, new Date(), TransactionType.BUY));
+        transactions.add(new Transaction("33333", 5, new Date(), TransactionType.BUY));
+        transactions.add(new Transaction("33333", 2, new Date(), TransactionType.SELL));
+
+        System.out.println(streamApiTraining.calculatePositions(transactions).size());
+        System.out.println(streamApiTraining.calculatePositionsStream(transactions).size());
+        System.out.println(streamApiTraining.calculatePositions(transactions).get("33333"));
+        System.out.println(streamApiTraining.calculatePositionsStream(transactions).get("33333"));
+    }
+
 }
 
