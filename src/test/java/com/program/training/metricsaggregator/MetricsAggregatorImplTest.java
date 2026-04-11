@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * @author naletov
  */
-class MetricsAgregatorImplTest
+class MetricsAggregatorImplTest
 {
     private MetricsAggregator metrics;
     private MutableClock clock;

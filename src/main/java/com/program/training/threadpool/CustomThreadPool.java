@@ -1,7 +1,7 @@
 package com.program.training.threadpool;
 
 /**
- *  We need to implement our own simplified version of a thread pool.
+ * We need to implement our own simplified version of a thread pool.
  * We have a task queue. Several workers (threads) should retrieve tasks from the queue in parallel and execute them.
  * @author naletov
  */
