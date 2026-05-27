@@ -18,8 +18,8 @@ class EventThrottlerTest
 
         String deviceId = "sensor-temp-01";
 
-        assertTrue(throttler.shouldAcceptEvent(deviceId, 1));
         assertTrue(throttler.shouldAcceptEvent(deviceId, 2));
+        assertTrue(throttler.shouldAcceptEvent(deviceId, 1));
 
         // 4-е событие должно быть отклонено
         assertFalse(throttler.shouldAcceptEvent(deviceId, 1));

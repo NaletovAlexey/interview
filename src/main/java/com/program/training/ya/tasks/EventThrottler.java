@@ -52,8 +52,8 @@ public class EventThrottler
             if (!map.containsKey(deviceId))
             {
                 receivedAt = new ArrayList<>();
-                receivedAt.add(Instant.now());
                 map.put(deviceId, receivedAt);
+                addNewEvent(eventCount, receivedAt);
                 return true;
             }
             // List cleanup
@@ -65,17 +65,22 @@ public class EventThrottler
             {
                 return false;
             }
-            Instant currentTime = Instant.now();
-            for (int i = 0; i < eventCount; i++)
-            {
-                receivedAt.add(currentTime);
-            }
+            addNewEvent(eventCount, receivedAt);
         }
         finally
         {
             lock.unlock();
         }
         return true;
+    }
+
+    private void addNewEvent(int eventCount, List<Instant> receivedAt)
+    {
+        Instant currentTime = Instant.now();
+        for (int i = 0; i < eventCount; i++)
+        {
+            receivedAt.add(currentTime);
+        }
     }
 
     private void cleanupEvents(String deviceId)
