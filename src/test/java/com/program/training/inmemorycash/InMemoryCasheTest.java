@@ -10,6 +10,12 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
+ * Tests for {@link InMemoryCashe} covering the in-memory cache exercise.
+ *
+ * <p>Verifies LRU eviction when capacity is exceeded, thread-safe concurrent
+ * {@code put} operations under load, and basic lifecycle operations
+ * ({@code remove}, {@code clear}).</p>
+ *
  * @author naletov
  */
 class InMemoryCasheTest
@@ -60,7 +66,7 @@ class InMemoryCasheTest
         }
         startLatch.await();
         executorService.shutdown();
-        boolean done = executorService.awaitTermination(5, TimeUnit.MICROSECONDS);
+        boolean done = executorService.awaitTermination(5, TimeUnit.MILLISECONDS);
         assertTrue(done);
 
         inMemoryCashe.put(-1, "test");

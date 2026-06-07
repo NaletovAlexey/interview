@@ -11,6 +11,20 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
+ * Thread-safe in-memory cache with LRU eviction and optional TTL expiration.
+ *
+ * <p>This class implements a classic cache design problem: store key-value pairs in
+ * memory with a bounded capacity, evict the least recently used entry when the limit
+ * is exceeded, and optionally expire entries after a configurable time-to-live.
+ * Concurrent {@code put}, {@code get}, and {@code remove} calls must remain safe
+ * under multi-threaded access.</p>
+ *
+ * <p>LRU ordering is maintained with an access-order {@link LinkedHashMap}; expired
+ * entries are removed lazily on {@code get} and periodically by a background cleaner
+ * when TTL is enabled. All map mutations are guarded by a {@link ReadWriteLock}.</p>
+ *
+ * @param <K> the key type
+ * @param <V> the value type
  * @author naletov
  */
 public class InMemoryCashe<K, V> implements Cashe<K, V>, AutoCloseable
@@ -42,7 +56,7 @@ public class InMemoryCashe<K, V> implements Cashe<K, V>, AutoCloseable
                         return t;
                     });
             cleanUpExecutor.scheduleAtFixedRate(this::cleanUpExpiredEntries,
-                    ttlMillis, ttlMillis, TimeUnit.MICROSECONDS);
+                    ttlMillis, ttlMillis, TimeUnit.MILLISECONDS);
         }
         else
         {

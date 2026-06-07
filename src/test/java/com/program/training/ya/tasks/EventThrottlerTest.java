@@ -25,6 +25,7 @@ class EventThrottlerTest
         assertFalse(throttler.shouldAcceptEvent(deviceId, 1));
 
         Thread.sleep(1100);
-        assertTrue(throttler.shouldAcceptEvent(deviceId, 1));
+        assertTrue(throttler.shouldAcceptEvent(deviceId, 2));
+        assertFalse(throttler.shouldAcceptEvent(deviceId, 2));
     }
 }

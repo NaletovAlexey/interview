@@ -61,7 +61,7 @@ public class EventThrottler
 
             receivedAt = map.get(deviceId);
             // check events count
-            if (receivedAt.size() >= maxEventsByDevice)
+            if (receivedAt.size() + eventCount > maxEventsByDevice)
             {
                 return false;
             }
