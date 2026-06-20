@@ -10,7 +10,24 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
+ * Fixed-size thread pool backed by an unbounded {@link LinkedBlockingQueue}.
+ *
+ * <h2>Lifecycle</h2>
+ * <ol>
+ *   <li><b>Running</b> — workers block on {@link BlockingQueue#take()} and execute tasks.</li>
+ *   <li><b>Shutdown</b> — {@link #shutdown()} sets the {@code isShutdown} flag and enqueues
+ *       one no-op sentinel per worker to unblock threads waiting on {@code take()}.
+ *       Workers detect the flag, exit their main loop, and enter the drain phase.</li>
+ *   <li><b>Drain</b> — workers flush remaining tasks via non-blocking {@link BlockingQueue#poll()}
+ *       so that already-enqueued work is not discarded.</li>
+ * </ol>
+ *
+ * <h2>Thread safety</h2>
+ * <p>The {@code isShutdown} flag is an {@link AtomicBoolean} to guarantee a single atomic
+ * state transition.  The task queue is a thread-safe {@link LinkedBlockingQueue}.
+ *
  * @author naletov
+ * @see CustomThreadPool
  */
 public class CustomThreadPoolImpl implements CustomThreadPool
 {
@@ -19,6 +36,12 @@ public class CustomThreadPoolImpl implements CustomThreadPool
     private final List<Worker> workers;
     private final AtomicBoolean isShutdown = new AtomicBoolean(false);
 
+    /**
+     * Creates a new thread pool and immediately starts the specified number of worker threads.
+     *
+     * @param threadCount number of worker threads to create; must be greater than zero
+     * @throws IllegalArgumentException if {@code threadCount} is less than or equal to zero
+     */
     public CustomThreadPoolImpl(int threadCount) {
         if (threadCount <= 0) {
             throw new IllegalArgumentException("The number of threads must be greater than 0");
@@ -34,6 +57,7 @@ public class CustomThreadPoolImpl implements CustomThreadPool
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public void submit(Runnable task)
     {
@@ -46,6 +70,13 @@ public class CustomThreadPoolImpl implements CustomThreadPool
         taskQueue.add(task);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Injects one no-op sentinel task per worker thread so that threads blocked on
+     * {@link BlockingQueue#take()} are unblocked and can observe the shutdown flag on
+     * the next loop iteration.
+     */
     @Override
     public void shutdown()
     {

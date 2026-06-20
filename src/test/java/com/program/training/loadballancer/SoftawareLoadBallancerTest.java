@@ -14,6 +14,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
+ * Unit tests for {@link SoftawareLoadBallancer}.
+ *
+ * <p>Each test method targets a specific routing algorithm or behavioural contract.
+ * Concurrency tests use {@link CountDownLatch} barriers to maximise thread interleaving.
+ *
  * @author naletov
  */
 @ExtendWith(MockitoExtension.class)
@@ -29,6 +34,7 @@ class SoftawareLoadBallancerTest
     HttpRequest request2;
     HttpRequest request3;
 
+    /** Initialises a fresh ROUND_ROBIN balancer and five servers before every test. */
     @BeforeEach
     void setUp()
     {
@@ -43,12 +49,17 @@ class SoftawareLoadBallancerTest
         request3 = new HttpRequest("127.0.0.3");
     }
 
+    /** Shuts down the default balancer after every test to release the health-check thread. */
     @AfterEach
     void stop() throws InterruptedException
     {
         lb.shutdown();
     }
 
+    /**
+     * Verifies that ROUND_ROBIN cycles through all registered servers and wraps around
+     * correctly after a server is deregistered.
+     */
     @Test
     void testRoundRobinSelect()
     {
@@ -78,6 +89,10 @@ class SoftawareLoadBallancerTest
         assertEquals(selections.get(0).id(), selections.get(3).id(), "must be the same");
     }
 
+    /**
+     * Verifies that IP_HASH always routes the same client IP to the same server (session
+     * affinity) while routing different IPs to different servers.
+     */
     @Test
     void testIpHashSelect() throws InterruptedException
     {
@@ -104,6 +119,10 @@ class SoftawareLoadBallancerTest
         lb.shutdown();
     }
 
+    /**
+     * Verifies that LEAST_CONNECTIONS skips the server with the most connections under
+     * concurrent load and selects it again once its connection count drops below the others.
+     */
     @Test
     void testLeastConnectionsSelect() throws InterruptedException
     {
@@ -152,6 +171,10 @@ class SoftawareLoadBallancerTest
         lbLeastConnections.shutdown();
     }
 
+    /**
+     * Verifies that WEIGHTED_ROUND_ROBIN never selects servers whose weight counter has
+     * reached zero within the current cycle.
+     */
     @Test
     void testWeightedRoundRobinSelect() throws InterruptedException
     {
@@ -202,6 +225,10 @@ class SoftawareLoadBallancerTest
         lbWeightedRoundRobin.shutdown();
     }
 
+    /**
+     * Verifies that concurrent calls to {@link SoftawareLoadBallancer#selectServer} with
+     * five threads produce five distinct server selections without data races.
+     */
     @Test
     void concurrencySelection() throws InterruptedException
     {
@@ -251,6 +278,12 @@ class SoftawareLoadBallancerTest
         assertNotNull(selections.get("s5"));
     }
 
+    /**
+     * Verifies that illegal operations throw the expected exceptions:
+     * {@link NullPointerException} for null server arguments,
+     * {@link IllegalStateException} when the server pool is empty or all weight quotas
+     * are exhausted.
+     */
     @Test
     void testFailCases() throws InterruptedException
     {
@@ -264,5 +297,67 @@ class SoftawareLoadBallancerTest
         lbWeightedRoundRobin.decrementServerWeight(serverOne);
         assertThrows(IllegalStateException.class, () -> lbWeightedRoundRobin.selectServer(request1));
         lbWeightedRoundRobin.shutdown();
+    }
+
+    /**
+     * Verifies that a single registered server is always returned regardless of how many
+     * times {@link SoftawareLoadBallancer#selectServer} is called (degenerate round-robin).
+     */
+    @Test
+    void testSingleServerAlwaysSelected()
+    {
+        lb.registerService(serverOne);
+
+        for (int i = 0; i < 10; i++)
+        {
+            assertEquals(serverOne, lb.selectServer(request1),
+                    "single registered server must always be returned");
+        }
+    }
+
+    /**
+     * Verifies that deregistering a server removes it from the active pool so that
+     * subsequent selections never return it.
+     */
+    @Test
+    void testDeregisterRemovesServerFromPool()
+    {
+        lb.registerService(serverOne);
+        lb.registerService(serverTwo);
+        lb.registerService(serverThree);
+
+        lb.deregisterService(serverTwo);
+
+        List<String> selectedIds = new ArrayList<>();
+        for (int i = 0; i < 6; i++)
+        {
+            selectedIds.add(lb.selectServer(request1).id());
+        }
+
+        assertFalse(selectedIds.contains(serverTwo.id()), "deregistered server must never be selected");
+    }
+
+    /**
+     * Verifies that the weight counter restored by {@link SoftawareLoadBallancer#incrementServerWeight}
+     * allows a previously exhausted server to be selected again by WEIGHTED_ROUND_ROBIN.
+     */
+    @Test
+    void testWeightedRoundRobinIncrementRestoresEligibility() throws InterruptedException
+    {
+        SoftawareLoadBallancer lbWRR = new SoftawareLoadBallancer(Algorithm.WEIGHTED_ROUND_ROBIN, 5000);
+        lbWRR.registerService(serverOne); // weight 1
+
+        lbWRR.selectServer(request1);     // exhausts the single weight unit
+
+        assertThrows(IllegalStateException.class, () -> lbWRR.selectServer(request1),
+                "exhausted weight must throw IllegalStateException");
+
+        lbWRR.incrementServerWeight(serverOne);
+
+        Server selected = assertDoesNotThrow(() -> lbWRR.selectServer(request1),
+                "incremented weight must allow selection again");
+        assertEquals(serverOne, selected);
+
+        lbWRR.shutdown();
     }
 }

@@ -14,12 +14,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
+ * Unit tests for {@link CustomThreadPoolImpl}.
+ *
  * @author naletov
  */
 class CustomThreadPoolImplTest
 {
     private CustomThreadPoolImpl pool;
 
+    /** Shuts down the pool after each test to avoid thread leaks. */
     @AfterEach
     void tearDown() {
         if (pool != null) {
@@ -27,6 +30,9 @@ class CustomThreadPoolImplTest
         }
     }
 
+    /**
+     * Verifies that all submitted tasks are executed exactly once.
+     */
     @Test
     @DisplayName("Must successfully complete all assigned tasks")
     void shouldExecuteAllSubmittedTasks() throws InterruptedException {
@@ -54,6 +60,10 @@ class CustomThreadPoolImplTest
         assertEquals(taskCount, successCounter.get(), "The number of completed tasks must be exactly 10");
     }
 
+    /**
+     * Verifies that tasks are spread across more than one worker thread, confirming
+     * actual parallelism.
+     */
     @Test
     @DisplayName("Tasks must be distributed across different threads of the pool")
     void shouldDistributeTasksAmongMultipleThreads() throws InterruptedException {
@@ -78,6 +88,10 @@ class CustomThreadPoolImplTest
         assertTrue(threadNames.size() <= threadCount, "More threads were found than specified in the pool.");
     }
 
+    /**
+     * Verifies that {@link CustomThreadPoolImpl#submit} throws {@link IllegalStateException}
+     * after {@link CustomThreadPoolImpl#shutdown} has been called.
+     */
     @Test
     @DisplayName("Should throw an error when trying to add a task to a stopped pool.")
     void shouldThrowExceptionWhenSubmittingToShutdownPool() {
@@ -91,6 +105,10 @@ class CustomThreadPoolImplTest
         }, "The submit() method should throw IllegalStateException after shutdown()");
     }
 
+    /**
+     * Verifies that tasks already in the queue when {@link CustomThreadPoolImpl#shutdown}
+     * is called are still executed during the drain phase.
+     */
     @Test
     @DisplayName("Must complete the remaining tasks in the queue after calling shutdown")
     void shouldCompleteQueueTasksAfterShutdown() throws InterruptedException {

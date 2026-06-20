@@ -15,6 +15,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
 /**
+ * Unit tests for {@link RateLimiter}.
+ *
+ * <p>A {@link Clock} mock is used throughout so that time advances deterministically
+ * without the test actually sleeping.
+ *
  * @author naletov
  */
 @ExtendWith(MockitoExtension.class)
@@ -23,6 +28,9 @@ class RateLimiterTest
     private final Clock mockClock = Mockito.mock(Clock.class);
     private final RateLimiter limiter = new RateLimiter(2, 1000, mockClock);
 
+    /**
+     * Verifies that two requests within the window are both allowed when the limit is 2.
+     */
     @Test
     void allowsRequestsWithinLimit() {
         when(mockClock.currentTimeMillis()).thenReturn(1000L);
@@ -32,6 +40,9 @@ class RateLimiterTest
         assertTrue(limiter.allowRequest("user1"));
     }
 
+    /**
+     * Verifies that a third request within the window is rejected when the limit is 2.
+     */
     @Test
     void blocksRequestsOverLimit() {
         when(mockClock.currentTimeMillis()).thenReturn(1000L);
@@ -42,6 +53,10 @@ class RateLimiterTest
         assertFalse(limiter.allowRequest("user2"));
     }
 
+    /**
+     * Verifies that the quota resets after the time window elapses so that new requests
+     * are accepted again.
+     */
     @Test
     void resetsAfterTimeWindow() {
         when(mockClock.currentTimeMillis()).thenReturn(1000L);
@@ -52,12 +67,19 @@ class RateLimiterTest
         assertTrue(limiter.allowRequest("user3"));
     }
 
+    /**
+     * Verifies that a blank or {@code null} userId throws {@link IllegalArgumentException}.
+     */
     @Test
     void emptyUser() {
         assertThrows(IllegalArgumentException.class, () -> limiter.allowRequest(""));
         assertThrows(IllegalArgumentException.class, () -> limiter.allowRequest(null));
     }
 
+    /**
+     * Verifies per-user independence under concurrent load: user4 hits the cap at exactly
+     * 19 out of 20 requests, while all 10 requests from user5 succeed.
+     */
     @Test
     void severalUsersRequests() throws InterruptedException
     {

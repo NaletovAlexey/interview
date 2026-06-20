@@ -8,10 +8,16 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
+ * Unit tests for {@link PriorityEventBusImpl}.
+ *
  * @author naletov
  */
 class PriorityEventBusImplTest
 {
+    /**
+     * Verifies that subscribers are invoked in strictly descending priority order
+     * (10 → 5 → 1) regardless of registration sequence.
+     */
     @Test
     void shouldInvokeSubscribersInPriorityOrder() {
         PriorityEventBus bus = new PriorityEventBusImpl();
@@ -28,6 +34,10 @@ class PriorityEventBusImplTest
         assertEquals(List.of("high", "medium", "low"), executionOrder);
     }
 
+    /**
+     * Verifies that an exception thrown by one subscriber does not prevent remaining
+     * subscribers from being invoked.
+     */
     @Test
     void shouldContinuePublishingIfOneSubscriberFails() {
         PriorityEventBus bus = new PriorityEventBusImpl();

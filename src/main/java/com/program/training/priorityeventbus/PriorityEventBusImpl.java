@@ -12,13 +12,27 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
+ * Priority-based implementation of {@link PriorityEventBus}.
+ *
+ * <h2>Concurrency</h2>
+ * <p>The subscription registry is a {@link ConcurrentHashMap} keyed by event type; each
+ * subscriber list is a {@link CopyOnWriteArrayList}, making reads lock-free and concurrent
+ * registrations safe.  Delivery order is decided by sorting a per-dispatch snapshot of the
+ * list, so late-arriving subscriptions do not interfere with an ongoing publish.
+ *
+ * <h2>Error isolation</h2>
+ * <p>If a subscriber throws, the exception is caught and logged; remaining subscribers
+ * continue to execute normally.
+ *
  * @author naletov
+ * @see PriorityEventBus
  */
 public class PriorityEventBusImpl implements PriorityEventBus
 {
     private final Map<Class<?>, List<Subscriber<?>>> subscriptions = new ConcurrentHashMap<>();
     private static final Logger LOGGER = LoggerFactory.getLogger(PriorityEventBusImpl.class);
 
+    /** {@inheritDoc} */
     @Override
     public <T> void subscribe(Class<T> eventType, int priority, Consumer<T> action)
     {
@@ -30,6 +44,12 @@ public class PriorityEventBusImpl implements PriorityEventBus
                 .add(new Subscriber<>(priority, action));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Creates a sorted snapshot of the subscriber list at dispatch time to avoid
+     * holding a lock during subscriber execution.
+     */
     @Override
     public <T> void publish(T event)
     {

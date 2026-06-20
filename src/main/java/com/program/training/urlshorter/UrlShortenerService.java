@@ -6,7 +6,25 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
+ * Base-62 URL shortening service backed by two {@link ConcurrentHashMap} indexes.
+ *
+ * <h2>Encoding</h2>
+ * <p>Each new URL is assigned a monotonically increasing sequence number (starting at
+ * {@code 1_000_000} to guarantee at least 4 characters in the output) and encoded into a
+ * base-62 string using the alphabet
+ * {@code abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789}.
+ *
+ * <h2>Idempotency</h2>
+ * <p>{@link #shorten} uses {@link ConcurrentHashMap#computeIfAbsent} to atomically assign
+ * codes, so concurrent calls with the same URL always return the same code without
+ * producing duplicates.
+ *
+ * <h2>Thread safety</h2>
+ * <p>Both maps are {@link ConcurrentHashMap} instances and the sequence counter is an
+ * {@link AtomicLong}, making all operations safe for concurrent use without external locking.
+ *
  * @author naletov
+ * @see UrlShortener
  */
 public class UrlShortenerService implements UrlShortener
 {
@@ -21,6 +39,7 @@ public class UrlShortenerService implements UrlShortener
     // Counter for generating unique IDs (Starting with a million for the code length)
     private final AtomicLong sequence = new AtomicLong(1000000L);
 
+    /** {@inheritDoc} */
     @Override
     public String shorten(String longUrl)
     {
@@ -36,6 +55,7 @@ public class UrlShortenerService implements UrlShortener
         });
     }
 
+    /** {@inheritDoc} */
     @Override
     public String getOriginalUrl(String code)
     {
@@ -56,7 +76,14 @@ public class UrlShortenerService implements UrlShortener
         return sb.reverse().toString();
     }
 
-    // generate Random by link
+    /**
+     * Generates a random string of the specified length by sampling characters from the
+     * given source URL.
+     *
+     * @param length the number of characters in the result; must be positive
+     * @param url    the source string to sample characters from; must not be empty
+     * @return a random string of exactly {@code length} characters
+     */
     public String generateRandomString(int length, String url)
     {
         StringBuilder result = new StringBuilder(length);

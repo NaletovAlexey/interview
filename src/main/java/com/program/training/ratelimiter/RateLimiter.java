@@ -6,7 +6,20 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
+ * Per-user sliding-window rate limiter.
+ *
+ * <p>Each user has an independent timestamp queue that records the times of their recent
+ * requests.  Before deciding whether to allow a new request, entries older than
+ * {@code timeWindow} milliseconds are evicted from the queue.  A per-user
+ * {@link ReentrantLock} serialises the read–evict–write sequence for the same user while
+ * allowing requests from different users to proceed in parallel.
+ *
+ * <h2>Thread safety</h2>
+ * <p>Concurrent calls for different users proceed without contention.  Concurrent calls for
+ * the same user are serialised by the per-user lock.
+ *
  * @author naletov
+ * @see Clock
  */
 public class RateLimiter
 {
@@ -16,6 +29,12 @@ public class RateLimiter
     private final long timeWindow;
     private final Clock clock;
 
+    /**
+     * Creates a rate limiter backed by the real system clock.
+     *
+     * @param limit        maximum number of requests allowed per user within {@code timeWindowMs}
+     * @param timeWindowMs length of the sliding window in milliseconds
+     */
     public RateLimiter(int limit, long timeWindowMs) {
         this(limit, timeWindowMs, System::currentTimeMillis);
     }
@@ -26,6 +45,17 @@ public class RateLimiter
         this.clock = clock;
     }
 
+    /**
+     * Decides whether a new request from the given user should be allowed.
+     *
+     * <p>Timestamps outside the current window are evicted before the decision is made.
+     * If the remaining timestamp count is below {@code limit} the request is recorded and
+     * {@code true} is returned; otherwise the request is rejected and {@code false} is returned.
+     *
+     * @param userId the identifier of the requesting user; must not be {@code null} or blank
+     * @return {@code true} if the request is within the rate limit, {@code false} if throttled
+     * @throws IllegalArgumentException if {@code userId} is {@code null} or blank
+     */
     public boolean allowRequest(String userId)
     {
         if (userId == null || userId.isBlank())

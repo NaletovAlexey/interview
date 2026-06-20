@@ -13,17 +13,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
+ * Unit tests for {@link UrlShortenerService}.
+ *
  * @author naletov
  */
 class UrlShortenerServiceTest {
 
     private UrlShortenerService service;
 
+    /** Creates a fresh service instance before each test. */
     @BeforeEach
     void setUp() {
         service = new UrlShortenerService();
     }
 
+    /**
+     * Verifies that a shortened URL can be resolved back to the original long URL.
+     */
     @Test
     void shouldShortenAndResolveUrl() {
         String longUrl = "https://revolut.com";
@@ -33,6 +39,9 @@ class UrlShortenerServiceTest {
         assertThat(service.getOriginalUrl(code)).isEqualTo(longUrl);
     }
 
+    /**
+     * Verifies that shortening the same URL twice returns the identical code (idempotency).
+     */
     @Test
     void shouldReturnSameCodeForSameUrl() {
         String url = "https://google.com";
@@ -42,6 +51,10 @@ class UrlShortenerServiceTest {
         assertThat(code1).isEqualTo(code2);
     }
 
+    /**
+     * Verifies that 50 threads each shortening 100 distinct URLs produce 5 000 unique
+     * codes with no collisions under concurrent load.
+     */
     @Test
     void testConcurrency() throws InterruptedException {
         int threads = 50;
@@ -71,6 +84,10 @@ class UrlShortenerServiceTest {
         assertThat(codes).hasSize(threads * urlsPerThread);
     }
 
+    /**
+     * Verifies that {@link UrlShortenerService#generateRandomString} returns a string of
+     * the requested length and that calls with different source URLs produce different results.
+     */
     @Test
     void testRandomGenerator()
     {

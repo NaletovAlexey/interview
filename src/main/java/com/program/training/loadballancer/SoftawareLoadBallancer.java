@@ -11,7 +11,23 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
+ * Software load balancer that distributes incoming requests across a pool of backend
+ * servers using one of the strategies defined in {@link Algorithm}.
+ *
+ * <h2>Thread safety</h2>
+ * <p>The server registry uses a {@link ConcurrentHashMap} and the round-robin counter is
+ * an {@link AtomicInteger}, so concurrent calls to {@link #selectServer}, {@link #registerService},
+ * and {@link #deregisterService} are safe without external locking.
+ *
+ * <h2>Health checks</h2>
+ * <p>A background daemon thread invokes {@link #performHC} for every registered server at the
+ * configured interval.  In this skeleton implementation {@code performHC} always returns
+ * {@code true}; replace it with real HTTP/TCP probes as needed.
+ *
  * @author naletov
+ * @see Algorithm
+ * @see LoadBalancer
+ * @see LoadBalancerContext
  */
 public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
 {
@@ -23,6 +39,12 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
     private final Map<String, Integer> weightedRoundRobinCounters = new ConcurrentHashMap<>();
     private volatile boolean running = true;
 
+    /**
+     * Creates a new load balancer with the specified routing algorithm and health-check schedule.
+     *
+     * @param algorithm                 the routing strategy used for server selection
+     * @param healthCheckIntervalMillis interval in milliseconds between consecutive health checks
+     */
     public SoftawareLoadBallancer(Algorithm algorithm, long healthCheckIntervalMillis)
     {
         this.algorithm = algorithm;
@@ -36,6 +58,12 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
         startHealthCheckTask();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>For {@link Algorithm#WEIGHTED_ROUND_ROBIN} the server's initial weight counter is
+     * also populated in the internal weight map.
+     */
     @Override
     public void registerService(Server server)
     {
@@ -48,6 +76,12 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>For {@link Algorithm#WEIGHTED_ROUND_ROBIN} the server's weight counter is also
+     * removed from the internal weight map.
+     */
     @Override
     public void deregisterService(Server server)
     {
@@ -61,6 +95,7 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public Server selectServer(HttpRequest request)
     {
@@ -69,6 +104,7 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
         return algorithm.select(servers.values().stream().toList(), request, this);
     }
 
+    /** {@inheritDoc} */
     @Override
     public Server roundRobinSelect(List<Server> servers)
     {
@@ -76,6 +112,12 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
         return servers.get(index);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Uses {@code hashCode() & Integer.MAX_VALUE} instead of {@code Math.abs()} to avoid
+     * the overflow edge case where {@code Math.abs(Integer.MIN_VALUE)} returns a negative value.
+     */
     @Override
     public Server ipHashSelect(List<Server> servers, HttpRequest request)
     {
@@ -86,6 +128,7 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
         return servers.get(index);
     }
 
+    /** {@inheritDoc} */
     @Override
     public Server weightedRoundRobinSelect(List<Server> servers)
     {
@@ -97,12 +140,28 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
         return selected;
     }
 
+    /**
+     * Increments the remaining weight quota of the given server by one.
+     *
+     * <p>If the server is not yet present in the weight map, the counter is initialised to
+     * {@code server.weight() + 1}.
+     *
+     * @param server the server whose weight counter should be incremented
+     */
     public void incrementServerWeight(Server server)
     {
         weightedRoundRobinCounters.compute(server.id(),
                 (key, currentWeight)-> currentWeight == null ? server.weight() + 1 : currentWeight + 1);
     }
 
+    /**
+     * Decrements the remaining weight quota of the given server by one, clamping to zero.
+     *
+     * <p>Called automatically after each weighted-round-robin selection to reduce the
+     * server's remaining quota for the current cycle.
+     *
+     * @param server the server whose weight counter should be decremented
+     */
     public void decrementServerWeight(Server server)
     {
         weightedRoundRobinCounters.compute(server.id(),
@@ -116,6 +175,7 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
                 });
     }
 
+    /** {@inheritDoc} */
     @Override
     public Server leastConnectionsSelect(List<Server> servers)
     {
@@ -143,6 +203,12 @@ public class SoftawareLoadBallancer implements LoadBalancer, LoadBalancerContext
         );
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Stops the health-check loop and waits up to 5 seconds for the scheduler thread
+     * to terminate cleanly.
+     */
     @Override
     public void shutdown() throws InterruptedException
     {
