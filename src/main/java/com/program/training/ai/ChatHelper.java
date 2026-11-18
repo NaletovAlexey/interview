@@ -1,13 +1,13 @@
 package com.program.training.ai;
 
 import com.anthropic.client.AnthropicClient;
-import com.anthropic.models.messages.Message;
-import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.MessageParam;
-import com.anthropic.models.messages.Model;
+import com.anthropic.core.http.StreamResponse;
+import com.anthropic.helpers.MessageAccumulator;
+import com.anthropic.models.messages.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Инкапсулирует работу с историей диалога: хранит список сообщений
@@ -119,5 +119,50 @@ public class ChatHelper {
     public int historySize()
     {
         return messages.size();
+    }
+
+    /**
+     * Потоковая версия chat(): по мере генерации текста вызывает
+     * onTextChunk для каждого кусочка (например, чтобы печатать
+     * в консоль без ожидания полного ответа), а по завершении
+     * возвращает собранное целиком сообщение — как get_final_message()
+     * в Python-версии.
+     *
+     * Ответ в историю НЕ добавляется автоматически — как и в chat().
+     */
+    public Message chatStreaming(String system, Consumer<String> onTextChunk)
+    {
+        MessageCreateParams.Builder paramsBuilder = MessageCreateParams.builder()
+                .model(model)
+                .maxTokens(maxTokens)
+                .messages(messages);
+
+        if (system != null && !system.isBlank())
+        {
+            paramsBuilder.system(system);
+        }
+
+        MessageAccumulator accumulator = MessageAccumulator.create();
+
+        try (StreamResponse<RawMessageStreamEvent> stream =
+                     client.messages().createStreaming(paramsBuilder.build()))
+        {
+
+            stream.stream()
+                    .peek(accumulator::accumulate)
+                    .flatMap(event -> event.contentBlockDelta().stream())
+                    .flatMap(deltaEvent -> deltaEvent.delta().text().stream())
+                    .forEach(textDelta -> onTextChunk.accept(textDelta.text()));
+        }
+
+        return accumulator.message();
+    }
+
+    /**
+     * Перегрузка без system-промпта.
+    */
+    public Message chatStreaming(Consumer<String> onTextChunk)
+    {
+        return chatStreaming(null, onTextChunk);
     }
 }

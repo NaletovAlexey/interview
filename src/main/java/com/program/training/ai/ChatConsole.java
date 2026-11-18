@@ -1,5 +1,6 @@
 package com.program.training.ai;
 
+import com.anthropic.models.messages.Message;
 import io.github.cdimascio.dotenv.Dotenv;
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
@@ -74,13 +75,17 @@ public class ChatConsole
 
             chatHelper.addUserMessage(userInput);
 
+            // smoothy input (step 3 -> while AI thinking)
+//            Message finalMessage = chatHelper.chatStreaming(text -> System.out.print(text));
+//            String answer = finalMessage.content().get(0).text().orElseThrow().text();
+
             String answer;
             try
             {
-                // Без system-промпта
+                // step 1 -> Без system-промпта
                 answer = chatHelper.chat();
 
-                // С system-промптом
+                // step 2 -> С system-промптом
 //                String system = """
 //                        You are a patient math tutor.
 //                        Do not directly answer a student's questions.
